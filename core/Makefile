@@ -315,6 +315,7 @@ ifneq ($(TARGET_SIMULATOR),true)
 # Targets for boot/OS images
 # #################################################################
 
+
 # -----------------------------------------------------------------
 # the ramdisk
 INTERNAL_RAMDISK_FILES := $(filter $(TARGET_ROOT_OUT)/%, \
@@ -323,6 +324,8 @@ INTERNAL_RAMDISK_FILES := $(filter $(TARGET_ROOT_OUT)/%, \
 	$(ALL_GENERATED_SOURCES) \
 	$(ALL_DEFAULT_INSTALLED_MODULES))
 
+ifneq ($(BOARD_USES_MKIMAGE),true)
+
 BUILT_RAMDISK_TARGET := $(PRODUCT_OUT)/ramdisk.img
 
 # We just build this directly to the install location.
@@ -330,6 +333,27 @@ INSTALLED_RAMDISK_TARGET := $(BUILT_RAMDISK_TARGET)
 $(INSTALLED_RAMDISK_TARGET): $(MKBOOTFS) $(INTERNAL_RAMDISK_FILES) | $(MINIGZIP)
 	$(call pretty,"Target ram disk: $@")
 	$(hide) $(MKBOOTFS) $(TARGET_ROOT_OUT) | $(MINIGZIP) > $@
+
+else
+
+BUILT_RAMDISK_TARGET := $(PRODUCT_OUT)/uRamdisk
+
+INTERNAL_URAMDISKIMAGE_ARGS := -A ARM -O Linux -T RAMDisk -C gzip -n Image -d $(BUILT_RAMDISK_TARGET).cpio.gz
+
+# We just build this directly to the install location.
+INSTALLED_RAMDISK_TARGET := $(BUILT_RAMDISK_TARGET)
+$(INSTALLED_RAMDISK_TARGET):  $(MKIMAGE) $(INTERNAL_RAMDISK_FILES) | $(MINIGZIP) 
+	@echo ----- Making uRamdisk image ------
+	cp -f $(TARGET_ROOT_OUT)/init.$(TARGET_DEVICE).rc $(TARGET_ROOT_OUT)/init.rc
+	rm -f $(TARGET_ROOT_OUT)/init.$(TARGET_DEVICE).rc
+	$(MKBOOTFS) $(TARGET_ROOT_OUT) | $(MINIGZIP) > $(BUILT_RAMDISK_TARGET).cpio.gz
+	$(MKIMAGE) $(INTERNAL_URAMDISKIMAGE_ARGS) $(BUILT_RAMDISK_TARGET)
+	rm -f $(BUILT_RAMDISK_TARGET).cpio.gz
+	@echo ----- Made uRamdisk image -------- $@
+	$(call pretty,"Target uramdisk: $@")
+
+endif
+
 
 
 ifneq ($(strip $(TARGET_NO_KERNEL)),true)
