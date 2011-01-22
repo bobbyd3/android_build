@@ -324,9 +324,9 @@ INTERNAL_RAMDISK_FILES := $(filter $(TARGET_ROOT_OUT)/%, \
 	$(ALL_GENERATED_SOURCES) \
 	$(ALL_DEFAULT_INSTALLED_MODULES))
 
-ifneq ($(BOARD_USES_MKIMAGE),true)
-
 BUILT_RAMDISK_TARGET := $(PRODUCT_OUT)/ramdisk.img
+
+ifneq ($(BOARD_USES_MKIMAGE),true)
 
 # We just build this directly to the install location.
 INSTALLED_RAMDISK_TARGET := $(BUILT_RAMDISK_TARGET)
@@ -336,21 +336,17 @@ $(INSTALLED_RAMDISK_TARGET): $(MKBOOTFS) $(INTERNAL_RAMDISK_FILES) | $(MINIGZIP)
 
 else
 
-BUILT_RAMDISK_TARGET := $(PRODUCT_OUT)/uRamdisk
-
 INTERNAL_URAMDISKIMAGE_ARGS := -A ARM -O Linux -T RAMDisk -C gzip -n Image -d $(BUILT_RAMDISK_TARGET).cpio.gz
 
 # We just build this directly to the install location.
 INSTALLED_RAMDISK_TARGET := $(BUILT_RAMDISK_TARGET)
 $(INSTALLED_RAMDISK_TARGET):  $(MKIMAGE) $(INTERNAL_RAMDISK_FILES) | $(MINIGZIP) 
-	@echo ----- Making uRamdisk image ------
-	$(MKBOOTFS) $(TARGET_ROOT_OUT) | $(MINIGZIP) > $(BUILT_RAMDISK_TARGET).cpio.gz
-	$(MKIMAGE) $(INTERNAL_URAMDISKIMAGE_ARGS) $(BUILT_RAMDISK_TARGET)
-	rm -f $(BUILT_RAMDISK_TARGET).cpio.gz
-	@echo ----- Made uRamdisk image -------- $@
-	$(call pretty,"Target uramdisk: $@")
+	$(call pretty,"Target ram disk: $@")
+	$(hide) $(MKBOOTFS) $(TARGET_ROOT_OUT) | $(MINIGZIP) > $(BUILT_RAMDISK_TARGET).cpio.gz
+	$(MKIMAGE) $(INTERNAL_URAMDISKIMAGE_ARGS) $@
+	$(hide) rm $(BUILT_RAMDISK_TARGET).cpio.gz
 
-endif
+endif # BOARD_USES_MKIMAGE != true
 
 
 
@@ -1021,6 +1017,7 @@ endif
 # Depending on the various images guarantees that the underlying
 # directories are up-to-date.
 $(BUILT_TARGET_FILES_PACKAGE): \
+        $(INSTALLED_RAMDISK_TARGET) \
 		$(INSTALLED_BOOTIMAGE_TARGET) \
 		$(INSTALLED_RADIOIMAGE_TARGET) \
 		$(INSTALLED_RECOVERYIMAGE_TARGET) \
@@ -1060,6 +1057,9 @@ endif
 		$(TARGET_ROOT_OUT),$(zip_root)/BOOT/RAMDISK)
 ifdef INSTALLED_KERNEL_TARGET
 	$(hide) $(ACP) $(INSTALLED_KERNEL_TARGET) $(zip_root)/BOOT/kernel
+endif
+ifdef INSTALLED_RAMDISK_TARGET
+	$(hide) $(ACP) $(INSTALLED_RAMDISK_TARGET) $(zip_root)/BOOT/ramdisk.img
 endif
 ifdef INSTALLED_2NDBOOTLOADER_TARGET
 	$(hide) $(ACP) \
@@ -1152,9 +1152,15 @@ else
 $(INTERNAL_OTA_PACKAGE_TARGET): override_device := $(TARGET_OTA_ASSERT_DEVICE)
 endif
 
+ifneq ($(TARGET_PROVIDES_RELEASETOOLS), true)
+    OTA_FROM_TARGET_SCRIPT := ./build/tools/releasetools/ota_from_target_files
+else
+    OTA_FROM_TARGET_SCRIPT := $(TARGET_RELEASETOOL_OTA_FROM_TARGET_SCRIPT)
+endif
+
 $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(OTATOOLS)
 	@echo "Package OTA: $@"
-	$(hide) ./build/tools/releasetools/ota_from_target_files -v \
+	$(OTA_FROM_TARGET_SCRIPT) -v \
 	   -p $(HOST_OUT) \
            -k $(KEY_CERT_PAIR) \
            --backup=$(backuptool) \
@@ -1192,9 +1198,15 @@ else
 $(INTERNAL_UPDATE_PACKAGE_TARGET): extensions := $(TARGET_RELEASETOOLS_EXTENSIONS)
 endif
 
+ifneq ($(TARGET_PROVIDES_RELEASETOOLS), true)
+    IMG_FROM_TARGET_SCRIPT := ./build/tools/releasetools/img_from_target_files
+else
+    IMG_FROM_TARGET_SCRIPT := $(TARGET_RELEASETOOL_IMG_FROM_TARGET_SCRIPT)
+endif
+
 $(INTERNAL_UPDATE_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(OTATOOLS)
 	@echo "Package: $@"
-	$(hide) ./build/tools/releasetools/img_from_target_files -v \
+	$(IMG_FROM_TARGET_SCRIPT) -v \
 	   -s $(extensions) \
 	   -p $(HOST_OUT) \
 	   $(BUILT_TARGET_FILES_PACKAGE) $@
@@ -1419,7 +1431,7 @@ deps := \
 	$(OUT_DOCS)/offline-sdk-timestamp \
 	$(SYMBOLS_ZIP) \
 	$(INSTALLED_SYSTEMIMAGE) \
-	$(INSTALLED_USERDATAIMAGE_TARGET) \
+	$(INSTALLED_DATAIMAGE_TARGET) \
 	$(INSTALLED_RAMDISK_TARGET) \
 	$(INSTALLED_SDK_BUILD_PROP_TARGET) \
 	$(INSTALLED_BUILD_PROP_TARGET) \
