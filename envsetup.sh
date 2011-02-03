@@ -446,8 +446,15 @@ function print_lunch_menu()
     local uname=$(uname)
     echo
     echo "You're building on" $uname
+    if [ "$(uname)" = "Darwin" ] ; then
+    	echo "  (ohai, koush!)"
+    fi
     echo
-    echo "Lunch menu... pick a combo:"
+    if [ "z${CM_DEVICES_ONLY}" != "z" ]; then
+       echo "Breakfast menu... pick a combo:"
+    else
+       echo "Lunch menu... pick a combo:"
+    fi
 
     local i=1
     local choice
@@ -457,7 +464,46 @@ function print_lunch_menu()
         i=$(($i+1))
     done
 
+    if [ "z${CM_DEVICES_ONLY}" != "z" ]; then
+       echo "... and don't forget the bacon!"
+    fi
+
     echo
+}
+
+function brunch()
+{
+    target=$1
+    echo "z$target" | grep -q "-"
+    if [ $? -eq 0 ]; then
+        # A buildtype was specified, assume a full device name
+        breakfast $target
+    else
+        # This is probably just the CM model name
+        breakfast cyanogen_$target-eng
+    fi
+    if [ $? -eq 0 ]; then
+        mka bacon
+    else
+        echo "No such item in brunch menu. Try 'breakfast'"
+        return 1
+    fi
+    return $?
+}
+
+function breakfast()
+{
+    CM_DEVICES_ONLY="true"
+    unset LUNCH_MENU_CHOICES
+    add_lunch_combo full-eng
+    for f in `/bin/ls vendor/cyanogen/vendorsetup.sh vendor/cyanogen/build/vendorsetup.sh 2> /dev/null`
+        do
+            echo "including $f"
+            . $f
+        done
+    unset f
+    lunch $*
+    return $?
 }
 
 function lunch()
@@ -1190,7 +1236,6 @@ else
 fi
 unset _xarray
 
-# Execute the contents of any vendorsetup.sh files we can find.
 for f in `/bin/ls vendor/*/vendorsetup.sh vendor/*/build/vendorsetup.sh device/*/*/vendorsetup.sh 2> /dev/null`
 do
     echo "including $f"
